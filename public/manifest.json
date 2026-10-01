@@ -1,10 +1,12 @@
 {
-  "id": "./",
+  "id": "/Trail-Room-App/",
   "name": "TrialRoom Studio - Showroom Virtual Try-On",
   "short_name": "TrialRoom",
   "description": "Mobile-first virtual try-on trial room for luxury Indian and western apparel showrooms with high-fidelity identity preservation.",
-  "start_url": "./",
-  "scope": "./",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "/Trail-Room-App/",
+  "scope": "/Trail-Room-App/",
   "display": "standalone",
   "display_override": [
     "window-controls-overlay",
@@ -18,14 +20,6 @@
     "lifestyle",
     "business"
   ],
-  "prefer_related_applications": false,
-  "related_applications": [
-    {
-      "platform": "play",
-      "id": "com.trialroom.showroom"
-    }
-  ],
-  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
   "icons": [
     {
       "src": "./pwa-192x192.png",
@@ -72,7 +66,7 @@
       "name": "Try-On Fitting",
       "short_name": "Try-On",
       "description": "Start camera and try on garments",
-      "url": "./",
+      "url": "/Trail-Room-App/",
       "icons": [
         {
           "src": "./pwa-192x192.png",
