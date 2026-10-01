@@ -1,12 +1,12 @@
 {
-  "id": "/Trail-Room-App/",
+  "id": "https://sajju8378.github.io/Trail-Room-App/",
   "name": "TrialRoom Studio - Showroom Virtual Try-On",
   "short_name": "TrialRoom",
   "description": "Mobile-first virtual try-on trial room for luxury Indian and western apparel showrooms with high-fidelity identity preservation.",
   "lang": "en",
   "dir": "ltr",
-  "start_url": "/Trail-Room-App/",
-  "scope": "/Trail-Room-App/",
+  "start_url": "https://sajju8378.github.io/Trail-Room-App/",
+  "scope": "https://sajju8378.github.io/Trail-Room-App/",
   "display": "standalone",
   "display_override": [
     "window-controls-overlay",
@@ -22,39 +22,39 @@
   ],
   "icons": [
     {
-      "src": "./pwa-192x192.png",
+      "src": "https://sajju8378.github.io/Trail-Room-App/pwa-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./pwa-512x512.png",
+      "src": "https://sajju8378.github.io/Trail-Room-App/pwa-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./pwa-maskable-512x512.png",
+      "src": "https://sajju8378.github.io/Trail-Room-App/pwa-maskable-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "./apple-touch-icon.png",
+      "src": "https://sajju8378.github.io/Trail-Room-App/apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png"
     }
   ],
   "screenshots": [
     {
-      "src": "./screenshot-mobile.png",
+      "src": "https://sajju8378.github.io/Trail-Room-App/screenshot-mobile.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Mobile Virtual Try-On Fitting Screen"
     },
     {
-      "src": "./screenshot-desktop.png",
+      "src": "https://sajju8378.github.io/Trail-Room-App/screenshot-desktop.png",
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
@@ -66,10 +66,10 @@
       "name": "Try-On Fitting",
       "short_name": "Try-On",
       "description": "Start camera and try on garments",
-      "url": "/Trail-Room-App/",
+      "url": "https://sajju8378.github.io/Trail-Room-App/",
       "icons": [
         {
-          "src": "./pwa-192x192.png",
+          "src": "https://sajju8378.github.io/Trail-Room-App/pwa-192x192.png",
           "sizes": "192x192"
         }
       ]
