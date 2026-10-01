@@ -1,0 +1,10 @@
+{
+  "name": "TrialRoom Studio - Showroom Virtual Try-On",
+  "description": "Mobile-first virtual try-on trial room for luxury Indian and western apparel showrooms with high-fidelity identity preservation and staff kiosk mode.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
