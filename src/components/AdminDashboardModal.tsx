@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, BarChart3, TrendingUp, DollarSign, Clock, ShieldCheck, Settings, Save, RefreshCw, KeyRound } from 'lucide-react';
 import { ShowroomConfig, Language } from '../types/index.js';
 import { TRANSLATIONS } from '../utils/translations.js';
+import { apiService } from '../services/apiService.js';
 
 interface AdminDashboardModalProps {
   lang: Language;
@@ -36,8 +37,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const fetchMetrics = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/admin/metrics');
-      const data = await res.json();
+      const data = await apiService.getAdminMetrics();
       setMetrics(data);
     } catch (err) {
       console.error('Failed to fetch metrics:', err);
@@ -49,12 +49,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/showroom-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formConfig),
-      });
-      const updated = await res.json();
+      const updated = await apiService.updateShowroomConfig(formConfig);
       onUpdateConfig(updated);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);

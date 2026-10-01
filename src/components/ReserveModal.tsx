@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, BellRing, CheckCircle2, Ticket, User, Phone, Sparkles } from 'lucide-react';
 import { Language, TryOnJob } from '../types/index.js';
 import { TRANSLATIONS } from '../utils/translations.js';
+import { apiService } from '../services/apiService.js';
 
 interface ReserveModalProps {
   lang: Language;
@@ -34,22 +35,17 @@ export const ReserveModal: React.FC<ReserveModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/reserve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: job.sessionId,
-          customerName,
-          customerPhone,
-          garmentSku: job.garmentSku || 'SKU-CUSTOM',
-          garmentName: job.garmentName,
-          garmentPrice: job.garmentPrice || 0,
-          size,
-        }),
+      const data = await apiService.reserveItem({
+        sessionId: job.sessionId,
+        customerName,
+        customerPhone,
+        garmentSku: job.garmentSku || 'SKU-CUSTOM',
+        garmentName: job.garmentName,
+        garmentPrice: job.garmentPrice || 0,
+        size,
       });
-      const data = await res.json();
       setReservationTicket({
-        id: data.reservationId || 'RES-' + Math.floor(100000 + Math.random() * 900000),
+        id: data.reservationId,
         message: data.message || t.reserveSuccessMsg,
       });
     } catch (err) {

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, Upload, Camera, Plus, Check } from 'lucide-react';
 import { CatalogueGarment, GarmentCategory, Language } from '../types/index.js';
 import { TRANSLATIONS } from '../utils/translations.js';
+import { apiService } from '../services/apiService.js';
 
 interface AddGarmentModalProps {
   lang: Language;
@@ -47,22 +48,17 @@ export const AddGarmentModal: React.FC<AddGarmentModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/catalogue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          category,
-          price: Number(price),
-          sku,
-          size,
-          fabric,
-          color,
-          imageUrl,
-          description,
-        }),
+      const data = await apiService.addCatalogueGarment({
+        name,
+        category,
+        price: Number(price),
+        sku,
+        size,
+        fabric,
+        color,
+        imageUrl,
+        description,
       });
-      const data = await res.json();
       onGarmentAdded(data);
       onClose();
     } catch (err) {

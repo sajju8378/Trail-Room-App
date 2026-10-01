@@ -3,6 +3,7 @@ import { Camera, Upload, FlipHorizontal, RefreshCw, Sparkles, Check, Sun, UserCh
 import { Language, PhotoValidationResult } from '../types/index.js';
 import { TRANSLATIONS } from '../utils/translations.js';
 import { PhotoValidationFeedback } from './PhotoValidationFeedback.js';
+import { apiService } from '../services/apiService.js';
 
 interface CameraCaptureProps {
   lang: Language;
@@ -150,12 +151,7 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
     setIsValidating(true);
 
     try {
-      const res = await fetch('/api/validate-photo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: dataUrl }),
-      });
-      const data: PhotoValidationResult = await res.json();
+      const data = await apiService.validatePhoto(dataUrl);
       setValidationResult(data);
     } catch (err) {
       console.error('Validation request failed:', err);

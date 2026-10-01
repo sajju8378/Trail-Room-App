@@ -26,6 +26,7 @@ import {
   TryOnJob,
 } from './types/index.js';
 import { TRANSLATIONS } from './utils/translations.js';
+import { apiService } from './services/apiService.js';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('en');
@@ -96,8 +97,7 @@ export default function App() {
 
   const fetchShowroomConfig = async () => {
     try {
-      const res = await fetch('/api/showroom-config');
-      const data = await res.json();
+      const data = await apiService.getShowroomConfig();
       setConfig(data);
     } catch (err) {
       console.warn('Config fetch fallback:', err);
@@ -106,8 +106,7 @@ export default function App() {
 
   const fetchCatalogue = async () => {
     try {
-      const res = await fetch('/api/catalogue');
-      const data = await res.json();
+      const data = await apiService.getCatalogue();
       setCatalogue(data);
     } catch (err) {
       console.warn('Catalogue fetch error:', err);
@@ -134,11 +133,7 @@ export default function App() {
   const handleQuickReset = async () => {
     if (pollingRef.current) clearInterval(pollingRef.current);
     try {
-      await fetch('/api/admin/reset-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      });
+      await apiService.resetSession(sessionId);
     } catch (e) {
       console.error(e);
     }
@@ -164,27 +159,22 @@ export default function App() {
 
     setCurrentStep(3); // Show Progress
     try {
-      const res = await fetch('/api/tryon/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          customerImage: customerPhoto,
-          garmentImage: selectedGarment.imageUrl,
-          garmentName: selectedGarment.name,
-          garmentCategory: selectedGarment.category,
-          garmentSku: selectedGarment.sku,
-          garmentPrice: selectedGarment.price,
-          providerId: config.activeProviderId,
-        }),
+      const data = await apiService.submitTryOn({
+        sessionId,
+        customerImage: customerPhoto,
+        garmentImage: selectedGarment.imageUrl,
+        garmentName: selectedGarment.name,
+        garmentCategory: selectedGarment.category,
+        garmentSku: selectedGarment.sku,
+        garmentPrice: selectedGarment.price,
+        providerId: config.activeProviderId,
       });
-      const data = await res.json();
 
       const initialJob: TryOnJob = {
         id: data.jobId,
         sessionId,
-        status: data.status || 'queued',
-        progress: data.progress || 5,
+        status: (data.status as any) || 'queued',
+        progress: data.progress || 10,
         currentStepText: data.currentStepText || 'Starting virtual try-on...',
         customerImage: customerPhoto,
         garmentImage: selectedGarment.imageUrl,
@@ -194,7 +184,7 @@ export default function App() {
         garmentPrice: selectedGarment.price,
         providerUsed: config.activeProviderId,
         createdAt: Date.now(),
-        expiresAt: data.expiresAt,
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
       };
 
       setCurrentJob(initialJob);
@@ -212,11 +202,10 @@ export default function App() {
 
     pollingRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/tryon/status/${jobId}`);
-        if (!res.ok) return;
-        const jobData: TryOnJob = await res.json();
+        const jobData = await apiService.getJobStatus(jobId);
+        if (!jobData) return;
 
-        setCurrentJob(jobData);
+        setCurrentJob({ ...jobData });
 
         if (jobData.status === 'completed') {
           if (pollingRef.current) clearInterval(pollingRef.current);

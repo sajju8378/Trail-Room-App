@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Sparkles, Plus, Upload, Camera, Check, Tag, Info, Layers } from 'lucide-react';
 import { CatalogueGarment, GarmentCategory, Language } from '../types/index.js';
 import { TRANSLATIONS } from '../utils/translations.js';
+import { apiService } from '../services/apiService.js';
 
 interface GarmentPickerProps {
   lang: Language;
@@ -80,12 +81,7 @@ export const GarmentPicker: React.FC<GarmentPickerProps> = ({
     setDetectionNotes(null);
 
     try {
-      const res = await fetch('/api/detect-garment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64 }),
-      });
-      const data = await res.json();
+      const data = await apiService.detectGarment(imageBase64);
       if (data.category) {
         setCustomCategory(data.category);
         setCustomName(data.detectedName || 'Custom Outfit');
