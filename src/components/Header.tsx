@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, QrCode, RotateCcw, Shield, BarChart3, Info, Lock, Globe } from 'lucide-react';
+import { Sparkles, QrCode, RotateCcw, Shield, BarChart3, Info, Lock, Globe, Smartphone } from 'lucide-react';
 import { Language, ShowroomConfig } from '../types/index.js';
 import { TRANSLATIONS } from '../utils/translations.js';
 
@@ -13,6 +13,7 @@ interface HeaderProps {
   onOpenPhoneQr: () => void;
   onOpenAdmin: () => void;
   onOpenArchitecture: () => void;
+  onOpenInstallApp?: () => void;
   currentStep: number;
 }
 
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPhoneQr,
   onOpenAdmin,
   onOpenArchitecture,
+  onOpenInstallApp,
 }) => {
   const t = TRANSLATIONS[lang];
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -108,6 +110,19 @@ export const Header: React.FC<HeaderProps> = ({
             <QrCode className="w-3.5 h-3.5 text-amber-500" />
             <span>{t.continueOnPhone}</span>
           </button>
+
+          {/* Android APK / App Install */}
+          {onOpenInstallApp && (
+            <button
+              type="button"
+              onClick={onOpenInstallApp}
+              title="Install Android App / Download APK"
+              className="flex items-center gap-1 text-xs text-emerald-300 bg-emerald-950/60 hover:bg-emerald-950 border border-emerald-800/80 px-2 py-1.5 rounded-lg transition-colors font-medium shadow-xs"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span>APK</span>
+            </button>
+          )}
 
           {/* Quick Reset (Staff / Next customer button) */}
           <button

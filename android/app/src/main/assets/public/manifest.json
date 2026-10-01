@@ -1,0 +1,22 @@
+{
+  "short_name": "TrialRoom",
+  "name": "TrialRoom Studio - Showroom Virtual Try-On",
+  "description": "Mobile-first virtual try-on trial room for luxury Indian and western apparel showrooms.",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=192&q=80",
+      "type": "image/jpeg",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=512&q=80",
+      "type": "image/jpeg",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./",
+  "background_color": "#0c0a09",
+  "theme_color": "#b45309",
+  "display": "standalone",
+  "orientation": "portrait"
+}

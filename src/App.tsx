@@ -17,6 +17,7 @@ import { ContinueOnPhoneModal } from './components/ContinueOnPhoneModal.js';
 import { SideBySideCompareModal } from './components/SideBySideCompareModal.js';
 import { AdminDashboardModal } from './components/AdminDashboardModal.js';
 import { ArchitectureInfoModal } from './components/ArchitectureInfoModal.js';
+import { InstallAppModal } from './components/InstallAppModal.js';
 import {
   CatalogueGarment,
   GarmentCategory,
@@ -88,6 +89,7 @@ export default function App() {
   const [isPhoneQrOpen, setIsPhoneQrOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isArchitectureOpen, setIsArchitectureOpen] = useState(false);
+  const [isInstallAppOpen, setIsInstallAppOpen] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -246,6 +248,7 @@ export default function App() {
         onOpenPhoneQr={() => setIsPhoneQrOpen(true)}
         onOpenAdmin={() => setIsAdminOpen(true)}
         onOpenArchitecture={() => setIsArchitectureOpen(true)}
+        onOpenInstallApp={() => setIsInstallAppOpen(true)}
         currentStep={currentStep}
       />
 
@@ -444,6 +447,12 @@ export default function App() {
       <ArchitectureInfoModal
         isOpen={isArchitectureOpen}
         onClose={() => setIsArchitectureOpen(false)}
+      />
+
+      <InstallAppModal
+        lang={lang}
+        isOpen={isInstallAppOpen}
+        onClose={() => setIsInstallAppOpen(false)}
       />
     </div>
   );
