@@ -30,9 +30,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android SDK Licenses & Install Android 36 SDK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -80,7 +81,8 @@ jobs:
             Download and install `app-debug.apk` directly on your Android phone or showroom tablet.
             
             - **Platform**: Android 8.0+ (API 24+)
-            - **Target SDK**: Android 15 (API 35)
+            - **Compile SDK**: Android 16 (API 36)
+            - **Target SDK**: Android 16 (API 36)
             - **Features**: Camera mirror with guide overlay, Virtual Try-On, Kiosk Mode, QR Transfer
           files: ${{ steps.apk-path.outputs.apk_path }}
         env:
