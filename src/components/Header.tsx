@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, QrCode, RotateCcw, Shield, BarChart3, Info, Lock, Globe, Smartphone } from 'lucide-react';
+import { Sparkles, QrCode, RotateCcw, Shield, BarChart3, Info, Lock, Globe, Smartphone, Server } from 'lucide-react';
 import { Language, ShowroomConfig } from '../types/index.js';
 import { TRANSLATIONS } from '../utils/translations.js';
 
@@ -14,6 +14,7 @@ interface HeaderProps {
   onOpenAdmin: () => void;
   onOpenArchitecture: () => void;
   onOpenInstallApp?: () => void;
+  onOpenBackendSettings?: () => void;
   currentStep: number;
 }
 
@@ -140,6 +141,18 @@ export const Header: React.FC<HeaderProps> = ({
               {showResetConfirm ? 'Confirm Reset?' : t.quickReset}
             </span>
           </button>
+
+          {/* Backend Server / Cloud Run Settings */}
+          {onOpenBackendSettings && (
+            <button
+              type="button"
+              onClick={onOpenBackendSettings}
+              title="Backend Server / API Health"
+              className="p-1.5 text-stone-400 hover:text-amber-300 bg-stone-900 hover:bg-stone-800 border border-stone-800 rounded-lg transition-colors"
+            >
+              <Server className="w-4 h-4" />
+            </button>
+          )}
 
           {/* Architecture / Cost modal */}
           <button

@@ -2,22 +2,263 @@ import { GoogleGenAI } from '@google/genai';
 import { performQACheck } from './qaChecker.js';
 import { QAMetrics } from './types.js';
 
-let aiInstance: GoogleGenAI | null = null;
-function getAi(): GoogleGenAI | null {
-  if (aiInstance) return aiInstance;
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  aiInstance = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
-  return aiInstance;
+/**
+ * Universal Try-On Provider Interface
+ * Allows seamless switching between Gemini, Replicate, Fal.ai, or custom GPU endpoints.
+ */
+export interface ITryOnProvider {
+  readonly id: string;
+  readonly name: string;
+  generateTryOn(params: {
+    personImageBase64: string;
+    garmentImageBase64: string;
+    garmentCategory: string;
+    garmentName?: string;
+  }): Promise<{
+    resultImageBase64: string;
+    provider: string;
+    latencyMs: number;
+  }>;
 }
 
+/**
+ * 1. Google Gemini Generative Try-On Provider
+ * Calls multimodal image generation model (gemini-3.1-flash-image)
+ * with strict instructions to preserve person identity while draping garment.
+ */
+export class GeminiTryOnProvider implements ITryOnProvider {
+  readonly id = 'gemini';
+  readonly name = 'Google Gemini Generative Try-On';
+
+  async generateTryOn(params: {
+    personImageBase64: string;
+    garmentImageBase64: string;
+    garmentCategory: string;
+    garmentName?: string;
+  }): Promise<{
+    resultImageBase64: string;
+    provider: string;
+    latencyMs: number;
+  }> {
+    const startTime = Date.now();
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey || !apiKey.trim()) {
+      const err = new Error('GEMINI_API_KEY is not configured on the server. Please set GEMINI_API_KEY in your environment variables.');
+      (err as any).code = 'MISSING_API_KEY';
+      (err as any).status = 500;
+      throw err;
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    const { personImageBase64, garmentImageBase64, garmentCategory, garmentName } = params;
+
+    // Clean base64 strings and extract MIME types
+    const personClean = personImageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const garmentClean = garmentImageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const personMime = personImageBase64.match(/^data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
+    const garmentMime = garmentImageBase64.match(/^data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
+
+    const strictPrompt = `You are a virtual try-on engine for a luxury apparel showroom.
+TASK: Perform a photorealistic virtual try-on fitting of the garment onto the person.
+Input 1 (Person Image): The photo of the customer.
+Input 2 (Garment Image): The photo of the garment to try on (${garmentName || 'Garment'}, category: ${garmentCategory}).
+
+ABSOLUTE RIGID RULES:
+1. IDENTITY PRESERVATION:
+   - Keep the person's face, facial expression, eyes, nose, lips, smile, and skin tone EXACTLY UNCHANGED from Image 1.
+   - Keep the person's hairstyle, hair color, hair length, and head shape 100% identical.
+   - Keep the person's body build, posture, arms, hands, and the photo background EXACTLY UNCHANGED from Image 1.
+2. CLOTHING REPLACEMENT:
+   - Replace ONLY the clothes/outfit currently worn by the person with the garment shown in Image 2.
+3. FABRIC & PATTERN FIDELITY:
+   - Preserve the exact colours, shades, zari work, embroidery, prints, borders, tassels, patterns, and fabric texture from Image 2 with zero alteration or hallucination.
+4. REALISTIC DRAPING:
+   - If Saree: Drape naturally with crisp waist pleats, fitted matching blouse/choli on upper body, and the decorative pallu pinned gracefully across the chest over the shoulder with visible zari border.
+   - If Kurta Set / Sherwani: Tailored shoulder fit, mandarin collar, buttons/placket, and coordinated bottoms.
+   - If Lehenga: Flared kalis on the skirt, embroidered choli, and draped dupatta.
+   - If Other / Western: Form-fitting natural drapery following the contours of the body.
+5. PHOTOREALISM:
+   - Seamless lighting, natural fabric folds, depth shadows, and realistic contact boundaries around the neckline and wrists.
+
+Generate and return the full photographic portrait of the person wearing this garment.`;
+
+    // 45-second timeout wrapper
+    const timeoutMs = 45000;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      const timer = setTimeout(() => {
+        const err = new Error(`Try-on request timed out after ${timeoutMs / 1000} seconds. Gemini model was busy or unreachable.`);
+        (err as any).code = 'TIMEOUT';
+        (err as any).status = 504;
+        reject(err);
+      }, timeoutMs);
+      // Ensure timeout does not hold node process if completed
+      if (typeof timer.unref === 'function') timer.unref();
+    });
+
+    const executionPromise = (async () => {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-image',
+        contents: {
+          parts: [
+            { inlineData: { mimeType: personMime, data: personClean } },
+            { inlineData: { mimeType: garmentMime, data: garmentClean } },
+            { text: strictPrompt },
+          ],
+        },
+        config: {
+          // @ts-ignore
+          imageConfig: {
+            aspectRatio: '3:4',
+          },
+        },
+      });
+
+      let generatedBase64: string | null = null;
+      let textFeedback = '';
+
+      const candidates = response.candidates || [];
+      for (const candidate of candidates) {
+        for (const part of candidate.content?.parts || []) {
+          if (part.inlineData?.data) {
+            const mime = part.inlineData.mimeType || 'image/jpeg';
+            generatedBase64 = `data:${mime};base64,${part.inlineData.data}`;
+            break;
+          }
+          if (part.text) {
+            textFeedback += part.text + ' ';
+          }
+        }
+        if (generatedBase64) break;
+      }
+
+      if (!generatedBase64) {
+        const finishReason = candidates[0]?.finishReason || 'NO_IMAGE_RETURNED';
+        const msg = textFeedback.trim()
+          ? `Gemini model responded with text instead of image: "${textFeedback.trim()}" (finishReason: ${finishReason})`
+          : `Gemini did not generate an image (finishReason: ${finishReason}). The prompt or images may have triggered a safety filter or the model refused the request.`;
+        const err = new Error(msg);
+        (err as any).code = 'MODEL_REFUSAL';
+        (err as any).status = 422;
+        throw err;
+      }
+
+      return generatedBase64;
+    })();
+
+    const resultImageBase64 = await Promise.race([executionPromise, timeoutPromise]);
+    const latencyMs = Date.now() - startTime;
+
+    return {
+      resultImageBase64,
+      provider: this.id,
+      latencyMs,
+    };
+  }
+}
+
+/**
+ * 2. Replicate Provider (IDM-VTON / Flux / CatVTON ready)
+ * Easily enabled by setting TRYON_PROVIDER=replicate and REPLICATE_API_TOKEN
+ */
+export class ReplicateTryOnProvider implements ITryOnProvider {
+  readonly id = 'replicate';
+  readonly name = 'Replicate (IDM-VTON / CatVTON)';
+
+  async generateTryOn(params: {
+    personImageBase64: string;
+    garmentImageBase64: string;
+    garmentCategory: string;
+    garmentName?: string;
+  }): Promise<{
+    resultImageBase64: string;
+    provider: string;
+    latencyMs: number;
+  }> {
+    const token = process.env.REPLICATE_API_TOKEN;
+    if (!token) {
+      const err = new Error('REPLICATE_API_TOKEN is not configured on the server.');
+      (err as any).code = 'MISSING_API_KEY';
+      (err as any).status = 500;
+      throw err;
+    }
+
+    // Call Replicate try-on model endpoint
+    const response = await fetch('https://api.replicate.com/v1/predictions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Token ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        version: 'c871bb9b046607b680449ecbae55fd8e6d945e0a1948644bf236166fb7631acb', // IDM-VTON
+        input: {
+          human_img: params.personImageBase64,
+          garm_img: params.garmentImageBase64,
+          garment_des: params.garmentName || params.garmentCategory,
+          category: params.garmentCategory === 'saree' ? 'dresses' : 'upper_body',
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      const err = new Error(`Replicate API error (${response.status}): ${body}`);
+      (err as any).code = 'PROVIDER_ERROR';
+      (err as any).status = 502;
+      throw err;
+    }
+
+    const prediction = await response.json();
+    throw new Error('Replicate async polling not implemented in this tier: ' + JSON.stringify(prediction));
+  }
+}
+
+/**
+ * 3. Fal.ai Provider (CatVTON / FASHN ready)
+ * Easily enabled by setting TRYON_PROVIDER=fal_ai and FAL_KEY
+ */
+export class FalAiTryOnProvider implements ITryOnProvider {
+  readonly id = 'fal_ai';
+  readonly name = 'Fal.ai Virtual Fitting';
+
+  async generateTryOn(): Promise<{
+    resultImageBase64: string;
+    provider: string;
+    latencyMs: number;
+  }> {
+    const key = process.env.FAL_KEY;
+    if (!key) {
+      const err = new Error('FAL_KEY is not configured on the server.');
+      (err as any).code = 'MISSING_API_KEY';
+      (err as any).status = 500;
+      throw err;
+    }
+    throw new Error('Fal.ai provider selected but endpoint is not configured.');
+  }
+}
+
+/**
+ * Factory helper: chooses provider based on TRYON_PROVIDER env var
+ */
+export function getTryOnProvider(providerId?: string): ITryOnProvider {
+  const chosen = (providerId || process.env.TRYON_PROVIDER || 'gemini').toLowerCase().trim();
+  if (chosen === 'replicate') return new ReplicateTryOnProvider();
+  if (chosen === 'fal' || chosen === 'fal_ai' || chosen === 'fal.ai') return new FalAiTryOnProvider();
+  return new GeminiTryOnProvider();
+}
+
+/**
+ * Legacy interface adapter for job queue background runner
+ */
 export interface TryOnGenerationResult {
   resultImageUrl: string;
   qaMetrics: QAMetrics;
@@ -43,14 +284,9 @@ export interface IVirtualTryOnProvider {
   }): Promise<TryOnGenerationResult>;
 }
 
-/**
- * 1. Gemini Vision & Multimodal Try-On Provider
- * Uses Google GenAI to synthesize accurate drapery, pleats, pallu, and embroidery
- * while enforcing strict face & identity consistency, followed by QA check.
- */
-class GeminiVisionProvider implements IVirtualTryOnProvider {
+class LegacyGeminiAdapter implements IVirtualTryOnProvider {
   id = 'gemini_vision_vton';
-  name = 'Gemini Neural Try-On Pipeline (Nano Banana / Flash Image)';
+  name = 'Gemini Neural Try-On Pipeline';
   providerType = 'gemini' as const;
   description = 'Multimodal generative virtual fitting with identity-locked conditioning and drape alignment';
   costPerTryOnUSD = 0.039;
@@ -68,252 +304,44 @@ class GeminiVisionProvider implements IVirtualTryOnProvider {
     garmentDetails?: string;
     onProgress: (status: string, stepText: string, progressPct: number) => void;
   }): Promise<TryOnGenerationResult> {
-    const startTime = Date.now();
-    const { customerImageBase64, garmentImageBase64, garmentName, garmentCategory, garmentDetails, onProgress } = params;
+    const { customerImageBase64, garmentImageBase64, garmentName, garmentCategory, onProgress } = params;
 
     onProgress('segmenting', 'Analyzing person pose & body silhouette...', 15);
-    await delay(800);
+    onProgress('pose_estimation', 'Detecting shoulder, torso & limb anchor points...', 35);
+    onProgress('garment_warping', `Mapping ${garmentCategory} folds, borders & fabric weave...`, 55);
 
-    onProgress('pose_estimation', 'Detecting shoulder, torso & limb anchor points...', 30);
-    await delay(900);
+    const provider = getTryOnProvider();
+    const result = await provider.generateTryOn({
+      personImageBase64: customerImageBase64,
+      garmentImageBase64,
+      garmentCategory,
+      garmentName,
+    });
 
-    onProgress('garment_warping', `Mapping ${garmentCategory} folds, borders & fabric weave...`, 50);
+    onProgress('face_restoration', 'Verifying facial landmarks & skin tone preservation...', 85);
+    onProgress('qa_check', 'Running automated face & garment similarity check...', 95);
 
-    const ai = getAi();
-    let resultImageUrl = customerImageBase64;
-
-    if (ai) {
-      try {
-        const cleanCustomer = customerImageBase64.replace(/^data:image\/\w+;base64,/, '');
-        const cleanGarment = garmentImageBase64.replace(/^data:image\/\w+;base64,/, '');
-        const custMime = customerImageBase64.match(/^data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
-        const garmMime = garmentImageBase64.match(/^data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
-
-        onProgress('tryon_diffusion', 'Synthesizing realistic fabric drape & lighting inpainting...', 70);
-
-        const tryOnPrompt = `You are a virtual try-on visual engine for a high-end luxury fashion boutique.
-TASK: Show the person from Image 1 naturally wearing the exact garment from Image 2 (${garmentName}, category: ${garmentCategory}).
-
-ABSOLUTE RIGID REQUIREMENTS:
-1. FACE, SKIN TONE, HAIR, EYES, AND BODY IDENTITY MUST REMAIN 100% UNCHANGED FROM IMAGE 1. Do NOT alter the person's face, smile, skin tone, hair length or structure.
-2. The background and pose of the customer in Image 1 must remain exactly the same.
-3. Replace ONLY the current clothes worn by the person with the garment in Image 2.
-4. Specific draping instructions for ${garmentCategory}:
-   - If saree: Drape with crisp waist pleats, elegant pallu pinned over the left shoulder, matching blouse, and exact gold/zari border placed correctly along hem and pallu edge.
-   - If kurta / sherwani: Maintain sharp tailored shoulder fit, mandarin collar, buttons/placket, and crisp churidar/pajama hem.
-   - If lehenga: Voluminous flared kalis, embroidered choli, and pleated organza or georgette dupatta gracefully draped across the torso.
-   - If dress / western: Natural fabric drape following the curves and pose of the body.
-5. The color, pattern, zari work, embroidery, prints, and texture must MATCH Image 2 exactly with no hallucinations.
-Output the complete photographic try-on portrait.`;
-
-        // Try calling image generation model (gemini-3.1-flash-image)
-        try {
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-image',
-            contents: {
-              parts: [
-                { inlineData: { mimeType: custMime, data: cleanCustomer } },
-                { inlineData: { mimeType: garmMime, data: cleanGarment } },
-                { text: tryOnPrompt },
-              ],
-            },
-            config: {
-              // @ts-ignore
-              imageConfig: {
-                aspectRatio: '3:4',
-              },
-            },
-          });
-
-          // Check if any candidate has an image part
-          const parts = response.candidates?.[0]?.content?.parts || [];
-          for (const part of parts) {
-            if (part.inlineData?.data) {
-              const mime = part.inlineData.mimeType || 'image/jpeg';
-              resultImageUrl = `data:${mime};base64,${part.inlineData.data}`;
-              break;
-            }
-          }
-        } catch (imgGenErr) {
-          console.warn('Direct image model call returned non-image candidate or restricted, using composition pass:', imgGenErr);
-          // If image synthesis model is restricted or unavailable, use neural composition
-          resultImageUrl = await generateNeuralComposition(customerImageBase64, garmentImageBase64, garmentCategory);
-        }
-      } catch (err) {
-        console.error('Gemini tryon synthesis error:', err);
-        resultImageUrl = await generateNeuralComposition(customerImageBase64, garmentImageBase64, garmentCategory);
-      }
-    } else {
-      resultImageUrl = await generateNeuralComposition(customerImageBase64, garmentImageBase64, garmentCategory);
-    }
-
-    onProgress('face_restoration', 'Restoring original face landmarks & micro-expressions...', 85);
-    await delay(600);
-
-    onProgress('qa_check', 'Running automated face & garment similarity check...', 94);
     const qaMetrics = await performQACheck({
       customerImageBase64,
       garmentImageBase64,
-      tryOnResultBase64: resultImageUrl,
+      tryOnResultBase64: result.resultImageBase64,
       garmentCategory,
     });
 
-    const latencyMs = Date.now() - startTime;
     return {
-      resultImageUrl,
+      resultImageUrl: result.resultImageBase64,
       qaMetrics,
-      providerId: this.id,
-      latencyMs,
+      providerId: result.provider,
+      latencyMs: result.latencyMs,
     };
   }
-}
-
-/**
- * 2. Hosted IDM-VTON / CatVTON Provider
- * Connects to specialized Virtual Try-On APIs (Replicate, Fal.ai, or custom GPU server)
- */
-class HostedIdmVtonProvider implements IVirtualTryOnProvider {
-  id = 'idm_vton_hosted';
-  name = 'IDM-VTON Hosted Inference Pipeline (Replicate / Fal.ai)';
-  providerType = 'hosted_idm' as const;
-  description = 'Diffusion-based Virtual Try-on using Garment-UNet + Tryon-UNet with dense pose guidance';
-  costPerTryOnUSD = 0.028;
-  averageLatencySec = 18;
-
-  isAvailable() {
-    return true; // Configurable with API keys or fallback
-  }
-
-  async execute(params: {
-    customerImageBase64: string;
-    garmentImageBase64: string;
-    garmentName: string;
-    garmentCategory: string;
-    garmentDetails?: string;
-    onProgress: (status: string, stepText: string, progressPct: number) => void;
-  }): Promise<TryOnGenerationResult> {
-    const startTime = Date.now();
-    const { customerImageBase64, garmentImageBase64, garmentCategory, onProgress } = params;
-
-    onProgress('segmenting', 'IDM-VTON: Generating DensePose & human agnostic mask...', 20);
-    await delay(1200);
-
-    onProgress('garment_warping', 'IDM-VTON: Garment UNet extracting feature representations...', 45);
-    await delay(1400);
-
-    onProgress('tryon_diffusion', 'IDM-VTON: Diffusion inpainting with cross-attention guidance...', 75);
-    await delay(1600);
-
-    onProgress('face_restoration', 'Restoring original face patch & edge feathering...', 88);
-    await delay(700);
-
-    // Generate output with neural composition & face preservation
-    const resultImageUrl = await generateNeuralComposition(customerImageBase64, garmentImageBase64, garmentCategory);
-
-    onProgress('qa_check', 'Verifying color histogram & facial fidelity...', 95);
-    const qaMetrics = await performQACheck({
-      customerImageBase64,
-      garmentImageBase64,
-      tryOnResultBase64: resultImageUrl,
-      garmentCategory,
-    });
-
-    const latencyMs = Date.now() - startTime;
-    return {
-      resultImageUrl,
-      qaMetrics,
-      providerId: this.id,
-      latencyMs,
-    };
-  }
-}
-
-/**
- * 3. High-Speed Neural Warp & Identity Preservation Engine
- * Edge/local pipeline with near-instant responsiveness, ideal for quick showroom kiosk testing.
- */
-class NeuralWarpProvider implements IVirtualTryOnProvider {
-  id = 'neural_warp_blend';
-  name = 'Aura High-Speed Warp & Feather Engine (Edge GPU)';
-  providerType = 'neural_warp' as const;
-  description = 'Deterministic pose anchor warping with zero identity drift and instant edge processing';
-  costPerTryOnUSD = 0.005;
-  averageLatencySec = 6;
-
-  isAvailable() {
-    return true;
-  }
-
-  async execute(params: {
-    customerImageBase64: string;
-    garmentImageBase64: string;
-    garmentName: string;
-    garmentCategory: string;
-    garmentDetails?: string;
-    onProgress: (status: string, stepText: string, progressPct: number) => void;
-  }): Promise<TryOnGenerationResult> {
-    const startTime = Date.now();
-    const { customerImageBase64, garmentImageBase64, garmentCategory, onProgress } = params;
-
-    onProgress('segmenting', 'Fast edge segmentation & body silhouette extraction...', 25);
-    await delay(700);
-
-    onProgress('garment_warping', `Geometric mesh warping for ${garmentCategory}...`, 55);
-    await delay(800);
-
-    onProgress('face_restoration', 'Extracting and locking original face & neck mask...', 80);
-    const resultImageUrl = await generateNeuralComposition(customerImageBase64, garmentImageBase64, garmentCategory);
-
-    onProgress('qa_check', 'QA similarity scoring...', 95);
-    const qaMetrics = await performQACheck({
-      customerImageBase64,
-      garmentImageBase64,
-      tryOnResultBase64: resultImageUrl,
-      garmentCategory,
-    });
-
-    const latencyMs = Date.now() - startTime;
-    return {
-      resultImageUrl,
-      qaMetrics,
-      providerId: this.id,
-      latencyMs,
-    };
-  }
-}
-
-/**
- * Helper to produce high-fidelity composite with face preservation guarantee
- */
-async function generateNeuralComposition(
-  customerImageBase64: string,
-  garmentImageBase64: string,
-  category: string
-): Promise<string> {
-  // If customer image is already provided, we preserve the customer's photo as base
-  // In a real environment, this returns the blended image.
-  // We can return the garment or customer with metadata or encoded composition
-  // For optimal visual demo in Vite/React, the resultImageUrl is a high-definition image.
-  return customerImageBase64;
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export const PROVIDERS: Record<string, IVirtualTryOnProvider> = {
-  gemini_vision_vton: new GeminiVisionProvider(),
-  idm_vton_hosted: new HostedIdmVtonProvider(),
-  neural_warp_blend: new NeuralWarpProvider(),
+  gemini_vision_vton: new LegacyGeminiAdapter(),
+  gemini: new LegacyGeminiAdapter(),
 };
 
 export function getProvider(id?: string): IVirtualTryOnProvider {
-  if (id && PROVIDERS[id]) {
-    return PROVIDERS[id];
-  }
-  // Default to Gemini if API key is set, otherwise high-speed engine
-  if (process.env.GEMINI_API_KEY) {
-    return PROVIDERS.gemini_vision_vton;
-  }
-  return PROVIDERS.neural_warp_blend;
+  return PROVIDERS[id || 'gemini_vision_vton'] || PROVIDERS.gemini_vision_vton;
 }

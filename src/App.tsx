@@ -18,6 +18,7 @@ import { SideBySideCompareModal } from './components/SideBySideCompareModal.js';
 import { AdminDashboardModal } from './components/AdminDashboardModal.js';
 import { ArchitectureInfoModal } from './components/ArchitectureInfoModal.js';
 import { InstallAppModal } from './components/InstallAppModal.js';
+import { BackendConnectionModal } from './components/BackendConnectionModal.js';
 import {
   CatalogueGarment,
   GarmentCategory,
@@ -90,6 +91,7 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isArchitectureOpen, setIsArchitectureOpen] = useState(false);
   const [isInstallAppOpen, setIsInstallAppOpen] = useState(false);
+  const [isBackendSettingsOpen, setIsBackendSettingsOpen] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -249,6 +251,7 @@ export default function App() {
         onOpenAdmin={() => setIsAdminOpen(true)}
         onOpenArchitecture={() => setIsArchitectureOpen(true)}
         onOpenInstallApp={() => setIsInstallAppOpen(true)}
+        onOpenBackendSettings={() => setIsBackendSettingsOpen(true)}
         currentStep={currentStep}
       />
 
@@ -453,6 +456,11 @@ export default function App() {
         lang={lang}
         isOpen={isInstallAppOpen}
         onClose={() => setIsInstallAppOpen(false)}
+      />
+
+      <BackendConnectionModal
+        isOpen={isBackendSettingsOpen}
+        onClose={() => setIsBackendSettingsOpen(false)}
       />
     </div>
   );
